@@ -1,0 +1,162 @@
+-- ========================================================
+-- MM2 SCRIPT FULL FUNCTION (ภาษาไทย)
+-- พัฒนาสำหรับ Roblox Murder Mystery 2
+-- ========================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+
+-- ค่าการตั้งค่าระบบ (Settings)
+local Settings = {
+    Aimbot = true,
+    AutoShoot = true,
+    AutoKill = true,
+    TPGunDrop = true,
+    ESP = {
+        Enabled = true,
+        Opacity = 1.0, -- ESP 100% (ช่วง 0.01 ถึง 1.0)
+        ShowSheriff = true,
+        ShowMurder = true
+    },
+    Hitbox = {
+        Enabled = true,
+        SizeMultiplier = 1.0 -- Hitbox 100% (ช่วง 0.01 ถึง 1.0)
+    }
+}
+
+-- ระบบค้นหาบทบาทผู้เล่น (Sheriff / Murderer / Hero)
+local function GetPlayerRoles()
+    local Roles = {
+        Murderer = nil,
+        Sheriff = nil,
+        Hero = nil
+    }
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            -- ตรวจสอบจากอาวุธในตัวหรือกระเป๋า
+            local backpack = player:FindFirstChild("Backpack")
+            local character = player.Character
+            
+            if (backpack and backpack:FindFirstChild("Knife")) or (character and character:FindFirstChild("Knife")) then
+                Roles.Murderer = player
+            elseif (backpack and backpack:FindFirstChild("Gun")) or (character and character:FindFirstChild("Gun")) then
+                Roles.Sheriff = player
+            end
+        end
+    end
+    return Roles
+end
+
+-- 1. ระบบ ESP (แสดงตำแหน่งผู้เล่น)
+local function ApplyESP()
+    if not Settings.ESP.Enabled then return end
+    
+    local Roles = GetPlayerRoles()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local char = player.Character
+            local highlight = char:FindFirstChild("MM2_ESP") or Instance.new("Highlight")
+            
+            highlight.Name = "MM2_ESP"
+            highlight.Parent = char
+            highlight.FillTransparency = 1 - Settings.ESP.Opacity
+            highlight.OutlineTransparency = 0
+            
+            -- กำหนดสีตามบทบาท
+            if player == Roles.Murderer and Settings.ESP.ShowMurder then
+                highlight.FillColor = Color3.fromRGB(255, 0, 0) -- สีแดง
+                highlight.Enabled = true
+            elseif player == Roles.Sheriff and Settings.ESP.ShowSheriff then
+                highlight.FillColor = Color3.fromRGB(0, 0, 255) -- สีน้ำเงิน
+                highlight.Enabled = true
+            else
+                highlight.FillColor = Color3.fromRGB(0, 255, 0) -- สีเขียว (Innocent)
+                highlight.Enabled = true
+            end
+        end
+    end
+end
+
+-- 2. ระบบ Hitbox Expansion (ขยายขนาดตัวผู้เล่น)
+local function ApplyHitbox()
+    if not Settings.Hitbox.Enabled then return end
+    
+    -- ขนาดปกติคือ 2, ขยายสูงสุด 100% ตามค่า Multiplier (ขนาด 2 ถึง 20)
+    local baseSize = 2
+    local newSize = baseSize + (18 * Settings.Hitbox.SizeMultiplier)
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = player.Character.HumanoidRootPart
+            hrp.Size = Vector3.new(newSize, newSize, newSize)
+            hrp.Transparency = 0.7
+            hrp.CanCollide = false
+        end
+    end
+end
+
+-- 3. ระบบ Aimbot และ Auto Shoot (เล็งและยิงอัตโนมัติ)
+local function ExecuteAimbotAndShoot()
+    local Roles = GetPlayerRoles()
+    local target = Roles.Murderer -- เป้าหมายหลักกรณีเป็น Sheriff คือยิง Murderer
+    
+    if target and target.Character and target.Character:FindFirstChild("Head") then
+        local targetHead = target.Character.Head.Position
+        
+        if Settings.Aimbot then
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetHead)
+        end
+        
+        if Settings.AutoShoot then
+            local gun = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Gun")
+            if gun then
+                gun:Activate() -- ทำการยิงอัตโนมัติเมื่อถือปืน
+            end
+        end
+    end
+end
+
+-- 4. ระบบ Teleport Gun Drop (วาร์ปไปเก็บปืนที่ตก)
+local function TeleportToGunDrop()
+    if not Settings.TPGunDrop then return end
+    
+    local gunDrop = Workspace:FindFirstChild("GunDrop")
+    if gunDrop and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        LocalPlayer.Character.HumanoidRootPart.CFrame = gunDrop.CFrame + Vector3.new(0, 2, 0)
+    end
+end
+
+-- 5. ระบบ Auto Kill (สังหารทุกคนอัตโนมัติกรณีเป็น Murderer)
+local function ExecuteAutoKill()
+    if not Settings.AutoKill then return end
+    
+    local knife = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Knife")
+    if knife then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                if player.Character.Humanoid.Health > 0 then
+                    -- วาร์ปไปที่ตำแหน่งเป้าหมายและใช้มีด
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 1)
+                    knife:Activate()
+                    task.wait(0.1)
+                end
+            end
+        end
+    end
+end
+
+-- Main Loop (การทำงานแบบ Real-time ตาม Frame)
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        ApplyESP()
+        ApplyHitbox()
+        ExecuteAimbotAndShoot()
+        TeleportToGunDrop()
+        ExecuteAutoKill()
+    end)
+end)
